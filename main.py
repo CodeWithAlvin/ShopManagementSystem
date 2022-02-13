@@ -1,6 +1,7 @@
 # imports
 import sqlite3 # for store data in database
-import os # for path related operations
+import os
+from unicodedata import name # for path related operations
 from bill import genrate # for bill generation
 
 class Store:
@@ -72,7 +73,7 @@ class Store:
             # table for adding store items
             self.cursor.execute('CREATE TABLE ITEMS (itemname TEXT, quantity INT, PRIMARY KEY (itemname))')
             # Table for adding BORROWINGS details
-            # self.cursor.execute('CREATE TABLE BORROWINGS (name TEXT,phone INT, amount INT,desc TEXT, date_time DATETIME DEFAULT NOW())')              
+            self.cursor.execute('CREATE TABLE BORROWINGS (name TEXT,phone INT, amount INT,desc TEXT, date_time DATETIME DEFAULT CURRENT_TIMESTAMP)')              
             # table for billing details
             self.cursor.execute('CREATE TABLE SALEDITEM (item TEXT,quantity INT)')
             # table for user sales
@@ -84,12 +85,12 @@ class Store:
             print('Canceled Store Creation!')
             exit()
     
-    def update_items(self):
+    def update_items(self,sign="+"):
         """
         updates the items in the store
         """
         self.show_items()
-        item = input('Enter item: ')
+        item = input('Enter item: ').lower()
         
         while True:
             # for catching unexpected input
@@ -106,7 +107,7 @@ class Store:
         self.cursor.execute(f"SELECT itemname FROM ITEMS WHERE itemname = '{item}'")
         # if already exists then update the quantity
         if self.cursor.fetchone():
-            self.cursor.execute(f"UPDATE ITEMS SET quantity = quantity + {quantity} WHERE itemname = '{item}'")
+            self.cursor.execute(f"UPDATE ITEMS SET quantity = quantity + {sign}{quantity} WHERE itemname = '{item}'")
             self.show_items()
             print(f'{item} quantity updated')
         # if not exists then add the item
@@ -121,7 +122,7 @@ class Store:
         """
         removes the item from the store
         """
-        item = input('Enter item: ')
+        item = input('Enter item: ').lower()
         self.cursor.execute(f"SELECT itemname FROM ITEMS WHERE itemname = '{item}'")
         # if item exists then remove it
         if self.cursor.fetchone():
@@ -207,26 +208,25 @@ class Store:
             genrate(self.name,name,phone,basket)
             
             # adding bill details to database
-            
-            # if item already exists, update quantity else add new item
-            self.cursor.execute(f"SELECT * FROM SALEDITEM WHERE item = '{item}'")
-            if self.cursor.fetchone():
-                self.cursor.execute(f"UPDATE SALEDITEM SET quantity = quantity + {quantity} WHERE item = '{item}'")
-            else:
-                self.cursor.execute(f"INSERT INTO SALEDITEM (item,quantity) VALUES ('{item}',{quantity})")
-            
-            # if customer already exists, update amount else add new customer
-            self.cursor.execute(f"SELECT * FROM COSTUMER WHERE name = '{name}'")
-            if self.cursor.fetchone():
-                self.cursor.execute(f"UPDATE COSTUMER SET amount = amount + {price*quantity} WHERE name = '{name}' AND phone = {phone}")
-            else:
-                self.cursor.execute(f"INSERT INTO COSTUMER (name,phone,amount) VALUES ('{name}',{phone},{price*quantity})")
-            
-            # adjusting store items
-            for item,price,quantity_saled in basket:
-                self.cursor.execute(f"SELECT quantity FROM ITEMS WHERE itemname = '{item}'")
+            for item,price,quantity in basket:
+                # if item already exists, update quantity else add new item
+                self.cursor.execute(f"SELECT * FROM SALEDITEM WHERE item = '{item.lower()}'")
                 if self.cursor.fetchone():
-                    self.cursor.execute(f"UPDATE ITEMS SET quantity = quantity - {quantity_saled} WHERE itemname = '{item}'")
+                    self.cursor.execute(f"UPDATE SALEDITEM SET quantity = quantity + {quantity} WHERE item = '{item.lower()}'")
+                else:
+                    self.cursor.execute(f"INSERT INTO SALEDITEM (item,quantity) VALUES ('{item.lower()}',{quantity})")
+                
+                # if customer already exists, update amount else add new customer
+                self.cursor.execute(f"SELECT * FROM COSTUMER WHERE name = '{name.lower()}'")
+                if self.cursor.fetchone():
+                    self.cursor.execute(f"UPDATE COSTUMER SET amount = amount + {price*quantity} WHERE name = '{name.lower()}' AND phone = {phone}")
+                else:
+                    self.cursor.execute(f"INSERT INTO COSTUMER (name,phone,amount) VALUES ('{name.lower()}',{phone},{price*quantity})")
+            
+                # adjusting store items
+                self.cursor.execute(f"SELECT quantity FROM ITEMS WHERE itemname = '{item.lower()}'")
+                if self.cursor.fetchone():
+                    self.cursor.execute(f"UPDATE ITEMS SET quantity = quantity - {quantity} WHERE itemname = '{item.lower()}'")
                 
         
         # if anything else then left it
@@ -260,8 +260,89 @@ class Store:
         for name,amount,phone in costumers:
             print(f'{name}'+' '*(20-len(name))+f'{amount}'+' '*(25-len(str(amount)))+f'{phone}')
         print("\n"+"-"*50+"\n")
+        # getting highest borrower and showing it
+        print(f"\n-----------------------TOP BORROWERS-----------------------\n")
+        # getting the highest borrower from BORROWINGS table and grouping them by name and phone
+        self.cursor.execute('SELECT name,phone,SUM(amount) FROM BORROWINGS GROUP BY name,phone ORDER BY SUM(amount) DESC')
+        borrowers = self.cursor.fetchall()
+        print("NAME                AMOUNT                    PHONE")
+        for name,phone,amount in borrowers:
+            print(f'{name}'+' '*(20-len(name))+f'{amount}'+' '*(25-len(str(amount)))+f'{phone}')
+        print("\n"+"-"*50+"\n")
 
 
+    # borrowing system
+    def borrowings(self,type="+"):
+        '''
+        add or remove borrowing
+        '''
+        name = input('Enter name: ')
+        
+        # catching unexpected input
+        while True:
+            phone = input('Enter phone: ')
+            amount = input('Enter amount: ')
+            
+            if phone.isdigit() and amount.isdigit():
+                phone = int(phone)
+                amount = int(amount)
+                break
+            else:
+                print('Invalid phone! Please enter again!')
+        
+        desc = input('Enter description: ')
+
+        # adding/removing borrowing to the database
+        self.cursor.execute(f"INSERT INTO BORROWINGS (name,phone,amount,desc) VALUES ('{name.lower()}',{phone},{type}{amount},'{desc.lower()}')")
+
+        print(f"{name}'s borrowing has been updated {type}{amount}!")
+        self.connection.commit()
+
+    # show all borrowings
+    def show_all_borrowings(self):
+        """
+        shows all borrowings of the customers
+        """
+        print("\n"+"-"*50+"\n")
+        self.cursor.execute('SELECT name,phone,SUM(amount) FROM BORROWINGS GROUP BY name,phone ORDER BY SUM(amount) DESC')
+        borrowers = self.cursor.fetchall()
+        print("NAME                AMOUNT                    PHONE")
+        for name,phone,amount in borrowers:
+            print(f'{name}'+' '*(20-len(name))+f'{amount}'+' '*(25-len(str(amount)))+f'{phone}')
+        print("\n"+"-"*50+"\n")
+    
+    # show borrowing of a customer
+    def show_person_borrowings(self):
+        """
+        shows the borrowings of a customer
+        """
+        name = input('Enter name: ')
+        # catching unexpected input
+        while True:
+            phone = input('Enter phone: ')
+            
+            if phone.isdigit():
+                phone = int(phone)
+                break
+            else:
+                print('Invalid phone no! Please enter again!')
+
+        self.cursor.execute(f"SELECT name,phone,amount,desc FROM BORROWINGS WHERE name = '{name.lower()}' AND phone = {phone}")
+        borrowers = self.cursor.fetchall()
+        print("\n"+"-"*50+"\n")
+        print("NAME                AMOUNT                    PHONE                    DESCRIPTION")
+        for name,phone,amount,desc in borrowers:
+            print(f'{name}'+' '*(20-len(name))+f'{amount}'+' '*(25-len(str(amount)))+f'{phone}'+' '*(25-len(str(phone)))+f'{desc}')
+        print("\n"+"-"*50+"\n")
+
+        if borrowers == []:
+            print(f"No borrowings found! with name: {name}")
+        else:
+            # get the total amount of the customer
+            self.cursor.execute(f"SELECT SUM(amount) FROM BORROWINGS WHERE name = '{name.lower()}' AND phone = {phone}")
+            total = self.cursor.fetchone()[0]
+            print(f"Total amount:               {total}")
+        
 
     def exit(self):
         # close the database connection and exits
@@ -284,7 +365,7 @@ if __name__=='__main__':
             else:
                 print('\n Invalid choice! Please enter again!\n')
         
-        option_dict = {1:"Update/Create Items",2:"Remove Item",3:"Show Items",4:"Billing",5:"Add Borrowings",6:"Remove Borrowings",7:"Stats",8:"Exit"}
+        option_dict = {1:"Update/Create Items",2:"Remove Item From Store",3:"Show Items",4:"Billing",5:"Add Borrowings",6:"Remove Borrowings",7:"Show All Borrowings",8:"Borrowing history of a person",9:"Stats",10:"Exit"}
         
         while True:
             print("\n")
@@ -295,12 +376,15 @@ if __name__=='__main__':
             if option.isdigit():
                 if int(option) in option_dict.keys():
                     if option == '1':
-                        print('1 - Update\n2 - Create')
+                        print('1 - Add\n2 - Subtract\n3 - Create')
                         choice = input('Enter your choice: ')
                         if choice == '1':
-                            print("\n+ to add item quantity - to remove ex: +50 -50\n")
-                            store.update_items()
+                            print("\nHow much item you want to add?\n")
+                            store.update_items('+')
                         elif choice == '2':
+                            print("\nHow much item you want to subtract?\n")
+                            store.update_items('-')
+                        elif choice == '3':
                             store.update_items()
                     elif option == '2':
                         store.remove_item()
@@ -309,13 +393,18 @@ if __name__=='__main__':
                     elif option == '4':
                         store.bill()
                     elif option == '5':
-                        store.add_borrowings()
+                        store.borrowings("+")
                     elif option == '6':
-                        store.remove_borrowings()
+                        store.borrowings("-")
                     elif option == '7':
-                        store.stats()
+                        store.show_all_borrowings()
                     elif option == '8':
+                        store.show_person_borrowings()
+                    elif option == '9':
+                        store.stats()
+                    elif option == '10':
                         store.exit()
             else:
                 print('Invalid option! Please enter a valid option!')
-        
+    
+

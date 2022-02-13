@@ -1,4 +1,5 @@
 import os
+import time
 from InvoiceGenerator.api import Invoice, Item, Client, Provider, Creator
 from InvoiceGenerator.pdf import SimpleInvoice
 
@@ -17,6 +18,6 @@ def genrate(store_name,name,phone,basket):
 
     invoice.currency = "Rs."
     doc = SimpleInvoice(invoice)
-    doc.gen(f"Bill/{name}{phone}.pdf", generate_qr_code=False) #you can put QR code by setting the #qr_code parameter to ‘True’
+    doc.gen(f"Bill/{name}{phone}{time.time()}.pdf", generate_qr_code=False) #you can put QR code by setting the #qr_code parameter to ‘True’
 
     print("Bill Genrated.")
