@@ -1,4 +1,5 @@
 # imports
+from re import S
 import sqlite3 # for store data in database
 import os
 from unicodedata import name # for path related operations
@@ -343,6 +344,21 @@ class Store:
             total = self.cursor.fetchone()[0]
             print(f"Total amount:               {total}")
         
+    # get notifaction of the store
+    def get_notifaction(self):
+        """
+        shows the notifications of the store
+        """
+        self.cursor.execute('SELECT itemname,quantity FROM ITEMS')
+        items = self.cursor.fetchall()
+        print("\n"+"-"*50+"\n")
+        # get how many items left
+        for item,quantity in items:
+            if quantity <= 10:
+                print(f"\nOnly {quantity} {item} left!\n")
+        
+        print("\n"+"-"*50+"\n")
+
 
     def exit(self):
         # close the database connection and exits
@@ -364,7 +380,8 @@ if __name__=='__main__':
                 break
             else:
                 print('\n Invalid choice! Please enter again!\n')
-        
+        # getting notifaction of the store
+        store.get_notifaction()
         option_dict = {1:"Update/Create Items",2:"Remove Item From Store",3:"Show Items",4:"Billing",5:"Add Borrowings",6:"Remove Borrowings",7:"Show All Borrowings",8:"Borrowing history of a person",9:"Stats",10:"Exit"}
         
         while True:
@@ -406,5 +423,3 @@ if __name__=='__main__':
                         store.exit()
             else:
                 print('Invalid option! Please enter a valid option!')
-    
-
