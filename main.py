@@ -1,8 +1,6 @@
 # imports
-from re import S
 import sqlite3 # for store data in database
-import os
-from unicodedata import name # for path related operations
+import os # for path related operations
 from bill import genrate # for bill generation
 
 class Store:
